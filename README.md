@@ -2,7 +2,7 @@
 
 A byte-preserving archive of NOAA's numeric, global OVATION aurora forecast JSON for AuroraWatch. The collector uses Python 3.11+ and its standard library. It does not modify the AuroraWatch app.
 
-**Deployment status (2026-09-22):** merged into the public repository's default branch, `main`. The collector workflow is active with its five-minute UTC schedule. [The first manual GitHub Actions collection](https://github.com/GefeiSHEN/NOAA-Aurora-Archive/actions/runs/35709058187) succeeded and published a verified snapshot at `2026-09-22T09:12:38Z`. A timer-triggered run had not yet been observed at this verification; an enabled schedule does not guarantee punctual execution. See `VERIFICATION.md` for evidence.
+**Deployment status (2026-09-22):** hosted collection and publication are verified, including [a scheduled run at 14:01 UTC](https://github.com/GefeiSHEN/NOAA-Aurora-Archive/actions/runs/35737401306). However, only one scheduled run appeared during the first eight hours; the requested five-minute job-start cadence was not achieved. Automatic runs now use bounded collection sessions to tolerate gaps between GitHub scheduler events. See `VERIFICATION.md` for evidence and limits; a manual catch-up does not verify automatic triggering.
 
 Source: <https://services.swpc.noaa.gov/json/ovation_aurora_latest.json>
 
@@ -11,8 +11,9 @@ Source: <https://services.swpc.noaa.gov/json/ovation_aurora_latest.json>
 1. Publish this repository as **public**, with `main` as its default branch. Keep the implementation in a pull request until its merge is authorized.
 2. Merge the reviewed implementation into the default branch. GitHub only schedules workflows present on that branch.
 3. Ensure Actions is enabled under **Settings → Actions → General**, and repository/organization policy permits `actions/checkout` and the collector job's explicit `contents: write` permission. If branch protection requires PRs or prevents the Actions bot from pushing, collection will fail visibly; an owner must resolve that policy before deployment. No personal access token or paid service is needed.
-4. Open **Actions → Collect NOAA OVATION → Run workflow**, select the default branch, and run it once. Confirm a successful run and a data commit (or successful unchanged no-op). The collection job deliberately skips private repositories and non-default branches.
-5. Check for an actual run whose event is **schedule**, and verify its committed indexes before treating scheduled collection as live. A successful manual run alone does not verify scheduling.
+4. Deploying changes to `scripts/**` or the collection workflow on `main` automatically starts a session through a `push` event. Data-only and documentation commits do not start sessions. A delayed session collects immediately, then on the UTC grid. The collection job deliberately skips private repositories and non-default branches.
+5. **Actions → Collect NOAA OVATION → Run workflow** still provides a one-shot manual collection. It queues behind an active session under the same concurrency group. To stop collection, disable the workflow and cancel its active/pending runs. Merely disabling the schedule does not terminate an already running session.
+6. Inspect actual data commits and collection times inside a running session. A healthy automatic session remains **in progress** for hours and makes successive data commits; one workflow row no longer represents one snapshot. Run names show `push`, `schedule`, or `workflow_dispatch` explicitly. Verify a subsequent scheduled session before claiming session handoff is proven.
 
 Local use:
 
@@ -21,15 +22,19 @@ python3 -m unittest discover -s tests -v
 python3 scripts/collect.py --root /tmp/ovation-preview
 ```
 
-The local collector writes to the supplied directory and does not commit or push. Use one writer per directory. The workflow runs `python3 scripts/publish.py --branch "$DEFAULT_BRANCH"` in a Git checkout with an authenticated `origin`. That command downloads once and publishes through disposable worktrees; it does not reset the caller's checkout.
+The local collector writes to the supplied directory and does not commit or push. Use one writer per directory. Manual workflow runs execute `python3 scripts/publish.py --branch "$DEFAULT_BRANCH"` in a Git checkout with an authenticated `origin`. That command downloads once and publishes through disposable worktrees; it does not reset the caller's checkout. Automatic runs execute `python3 -u scripts/session.py --branch "$DEFAULT_BRANCH" --minutes 340`, which calls that same publisher repeatedly.
 
 ## Schedule and reliability
 
 The native GitHub Actions cron is `2-59/5 * * * *`: UTC minutes 2, 7, 12, …, 57. This aims for two minutes after expected five-minute publication boundaries; neither NOAA publication nor GitHub execution is assumed punctual.
 
+Each automatic session samples for up to 340 minutes (5 hours 40 minutes), starting once immediately and then waiting for the next absolute UTC slot. Slow downloads skip elapsed slots, with no synthetic backfill or burst of catch-up requests. An unchanged response succeeds and the session continues. Exhausted fetch/push retries fail the job visibly. Each publisher invocation is capped at 10 minutes; the whole job at 355 minutes, below GitHub's six-hour hosted-job limit. Elapsed-time limits use a monotonic clock so wall-clock corrections cannot extend the session indefinitely.
+
+This keeps one standard Linux runner allocated during the session, including between collections. It uses more runner time than one-shot jobs; public standard-runner execution is free, but consumes one concurrent runner slot. The existing cron supplies subsequent sessions; queued runs wait without interrupting active collection. If GitHub supplies no successor, cancels a runner, or the collector fails, there can still be a gap. This is mitigation for missing job starts, not a guarantee of uninterrupted coverage or a repair to GitHub's scheduler. There is no external scheduler or self-dispatch chain.
+
 GitHub schedules can be delayed or dropped under load. Concurrency allows one running collector without canceling it; GitHub may replace an older pending run with a newer pending run. This is not a durable queue. In public repositories, schedules can be disabled after **60 days of repository inactivity**. Check Actions periodically and re-enable a disabled workflow when appropriate. See [GitHub schedule behavior](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule) and [concurrency behavior](https://docs.github.com/en/actions/concepts/workflows-and-actions/concurrency).
 
-The collector downloads an HTTP 200 response with a 30-second socket timeout and a 5 MiB body limit. It validates before writing. Network failures, HTTP 408/429/5xx, and invalid/incomplete responses receive up to three retries after 15, 30, and 60 seconds. `Retry-After` seconds or HTTP dates can extend a delay up to 120 seconds. Other HTTP errors fail immediately. Exhaustion returns a nonzero exit status and fails the Actions run. The job has a 15-minute overall timeout; Git commands each have a 60-second timeout.
+The collector downloads an HTTP 200 response with a 30-second socket timeout and a 5 MiB body limit. It validates before writing. Network failures, HTTP 408/429/5xx, and invalid/incomplete responses receive up to three retries after 15, 30, and 60 seconds. `Retry-After` seconds or HTTP dates can extend a delay up to 120 seconds. Other HTTP errors fail immediately. Exhaustion returns a nonzero exit status and fails the Actions run. Git commands each have a 60-second timeout.
 
 Validation requires a JSON MultiPoint, the expected data format, timezone-qualified observation/forecast timestamps, forecast time at or after observation, and all 65,160 unique one-degree grid coordinates: longitude 0…359 and latitude −90…90. Triples must be finite numeric values, aurora values 0…100, with both hemispheres represented. A future upstream schema/grid change intentionally fails closed and requires review. Delayed/stale but structurally valid data is retained with its real times; there is no invented freshness threshold.
 

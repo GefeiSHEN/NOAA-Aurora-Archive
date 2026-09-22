@@ -1,8 +1,16 @@
 name: Collect NOAA OVATION
+run-name: NOAA OVATION — ${{ github.event_name }} — ${{ github.ref_name }}
 
 on:
   schedule:
     - cron: '2-59/5 * * * *'
+  # Automatically start the collector when its implementation is deployed.
+  # Data-only commits do not start new sessions.
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/collect.yml'
+      - 'scripts/**'
   workflow_dispatch:
 
 permissions:
@@ -17,7 +25,7 @@ jobs:
     # Never spend private-repository runner minutes or publish from a feature branch.
     if: github.event.repository.private == false && github.ref_name == github.event.repository.default_branch
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 355
     permissions:
       contents: write
     steps:
@@ -28,6 +36,12 @@ jobs:
       - name: Test collector and publication
         run: python3 -m unittest discover -s tests -v
       - name: Collect and publish with conflict retries
+        if: github.event_name == 'workflow_dispatch'
         env:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: python3 scripts/publish.py --branch "$DEFAULT_BRANCH"
+      - name: Collect automatically at UTC minutes 2, 7, 12, …, 57
+        if: github.event_name != 'workflow_dispatch'
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: python3 -u scripts/session.py --branch "$DEFAULT_BRANCH" --minutes 340
