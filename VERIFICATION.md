@@ -18,4 +18,13 @@
 | ETag | `"e02a9-65c0e83722de3"` |
 | Last-Modified | `Tue, 22 Sep 2026 08:54:24 GMT` |
 
-The saved file's SHA-256 matches its metadata. This verifies collection and storage locally, not a live scheduled service. The implementation must be merged into the public default branch with Actions enabled and a successful scheduled run observed before scheduled collection can be described as live.
+The saved file's SHA-256 matches its metadata. This verifies collection and storage locally, not a live scheduled service. The deployment verification below records the subsequent merge and first hosted collection; timer-triggered operation is a separate check.
+
+## Deployment verification — 2026-09-22
+
+- [PR #1](https://github.com/GefeiSHEN/NOAA-Aurora-Archive/pull/1) merged with user authorization at `2026-09-22T09:12:22Z`.
+- Repository visibility is public; default branch is `main`; Actions is enabled. `Collect NOAA OVATION` is registered with state `active` and cron `2-59/5 * * * *`.
+- [Manual collection run 35709058187](https://github.com/GefeiSHEN/NOAA-Aurora-Archive/actions/runs/35709058187) succeeded. The hosted Linux job passed all 15 tests and published data in 10 seconds.
+- Data commit: `19284c1`. Observation `2026-09-22T09:04:00Z`, forecast `2026-09-22T10:32:00Z`, collection `2026-09-22T09:12:38Z`.
+- Saved path: `2026/09/22/20260922T090400Z.json`. All 65,160 triples passed validation, and saved bytes matched metadata SHA-256 `1acbcc7b06e104cf98662fae25c860634c0379fd943cf060d2f4b8ef75b4db52`.
+- At this check, no `schedule` event run had appeared. Manual hosted collection and publication are verified; automatic triggering is enabled but not yet observed.

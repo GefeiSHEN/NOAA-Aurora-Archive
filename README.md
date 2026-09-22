@@ -2,7 +2,7 @@
 
 A byte-preserving archive of NOAA's numeric, global OVATION aurora forecast JSON for AuroraWatch. The collector uses Python 3.11+ and its standard library. It does not modify the AuroraWatch app.
 
-**Deployment status:** the implementation is prepared on `codex/ovation-archive` for review. The included snapshot is a real local verification fetch, not proof of scheduled operation. Scheduled collection starts only after this workflow is merged into the public repository's default branch and GitHub Actions successfully runs it.
+**Deployment status (2026-09-22):** merged into the public repository's default branch, `main`. The collector workflow is active with its five-minute UTC schedule. [The first manual GitHub Actions collection](https://github.com/GefeiSHEN/NOAA-Aurora-Archive/actions/runs/35709058187) succeeded and published a verified snapshot at `2026-09-22T09:12:38Z`. A timer-triggered run had not yet been observed at this verification; an enabled schedule does not guarantee punctual execution. See `VERIFICATION.md` for evidence.
 
 Source: <https://services.swpc.noaa.gov/json/ovation_aurora_latest.json>
 
@@ -82,14 +82,14 @@ If runs stop or fail, these indexes freeze. Consumers must check timestamps them
 
 ## Consumer URLs
 
-After merge into public `GefeiSHEN/NOAA-Aurora-Archive` on `main`:
+Public consumer URLs for `GefeiSHEN/NOAA-Aurora-Archive` on `main`:
 
 - Latest pointer: <https://raw.githubusercontent.com/GefeiSHEN/NOAA-Aurora-Archive/main/latest.json>
 - Recent 24-hour index: <https://raw.githubusercontent.com/GefeiSHEN/NOAA-Aurora-Archive/main/recent.json>
 - Snapshot: prefix `https://raw.githubusercontent.com/GefeiSHEN/NOAA-Aurora-Archive/main/` to an entry's `path`.
 - Historical metadata example: <https://raw.githubusercontent.com/GefeiSHEN/NOAA-Aurora-Archive/main/metadata/2026/09/22.json>
 
-These default-branch URLs are deployment targets, not evidence the archive is live. If you rename the owner, repository, or default branch, update them. GitHub raw URLs may be cached. Fetch an index, use its immutable snapshot path, and verify the body hash. For a consistent multi-index view, use one Git commit SHA in place of `main` for every request.
+These default-branch URLs serve the published archive; check the entry timestamps for freshness. If you rename the owner, repository, or default branch, update them. GitHub raw URLs may be cached. Fetch an index, use its immutable snapshot path, and verify the body hash. For a consistent multi-index view, use one Git commit SHA in place of `main` for every request.
 
 ## Coverage and storage limits
 
