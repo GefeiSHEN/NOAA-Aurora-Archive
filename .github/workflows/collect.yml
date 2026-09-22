@@ -1,5 +1,5 @@
 name: Collect NOAA OVATION
-run-name: NOAA OVATION — ${{ github.event_name }} — ${{ github.ref_name }}
+run-name: NOAA OVATION — ${{ github.event_name }}${{ inputs.predecessor_run_id && format(' (handoff from {0})', inputs.predecessor_run_id) || '' }} — ${{ github.ref_name }}
 
 on:
   schedule:
@@ -12,6 +12,15 @@ on:
       - '.github/workflows/collect.yml'
       - 'scripts/**'
   workflow_dispatch:
+    inputs:
+      continue_collection:
+        description: Automatically start another six-minute session after success
+        type: boolean
+        default: true
+      predecessor_run_id:
+        description: Source run ID supplied by automatic handoff (leave empty for manual runs)
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -40,3 +49,31 @@ jobs:
         env:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: python3 -u scripts/session.py --branch "$DEFAULT_BRANCH" --minutes 6
+
+  handoff:
+    name: Start next session automatically
+    needs: collect
+    if: github.event.repository.private == false && github.ref_name == github.event.repository.default_branch && (github.event_name != 'workflow_dispatch' || inputs.continue_collection)
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    # The collection job cannot dispatch workflows. This job cannot write files.
+    permissions:
+      actions: write
+    steps:
+      - name: Dispatch successor with GitHub's built-in token
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          for attempt in 1 2 3; do
+            if timeout 20s gh api --method POST "repos/$REPOSITORY/actions/workflows/collect.yml/dispatches" \
+              -f ref="$DEFAULT_BRANCH" -F 'inputs[continue_collection]=true' \
+              -f "inputs[predecessor_run_id]=$GITHUB_RUN_ID"; then
+              echo "Successor requested automatically by run $GITHUB_RUN_ID."
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::Could not start the next collection session. Cron remains the recovery trigger."
+          exit 1
