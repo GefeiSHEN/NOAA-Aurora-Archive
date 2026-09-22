@@ -75,8 +75,7 @@ def migrate(root, now=None):
         entry = {**old, 'path': name}
         entries.append(entry)
         moves.append((payloads[old['path']], root / name))
-        day = Path(name).parent.relative_to(collect.ARCHIVE_DIR)
-        groups[root / 'OVATION/metadata' / day.with_suffix('.json')].append(entry)
+        groups[root / Path(name).parent / 'metadata.json'].append(entry)
     plans = [(path, collect.encode({'schema_version': 1, 'snapshots':
               sorted(items, key=collect.latest_key, reverse=True)})) for path, items in groups.items()]
     plans += [(root / 'OVATION/latest.json', collect.encode(

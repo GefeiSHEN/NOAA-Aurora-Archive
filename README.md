@@ -8,9 +8,12 @@ Source: [NOAA OVATION JSON](https://services.swpc.noaa.gov/json/ovation_aurora_l
 
 ```text
 OVATION/
-  YYYY/MM/DD/YYYYMMDDTHHMMSSZ.json
-  YYYY/MM/DD/YYYYMMDDTHHMMSSZ-<sha256>.json  # changed-content revision
-  metadata/YYYY/MM/DD.json                # forecast-day metadata
+  YYYY/
+    MM/
+      DD/
+        YYYYMMDDTHHMMSSZ.json
+        YYYYMMDDTHHMMSSZ-<sha256>.json     # changed-content revision
+        metadata.json                    # metadata for this day
   latest.json
   recent.json
 scripts/                                 # collection and workflow runtime
@@ -26,7 +29,7 @@ Forecast time identifies a frame. Identical bytes for an already archived foreca
 
 - [Latest index](https://raw.githubusercontent.com/GefeiSHEN/NOAA-Aurora-Archive/main/OVATION/latest.json)
 - [Recent 24-hour index](https://raw.githubusercontent.com/GefeiSHEN/NOAA-Aurora-Archive/main/OVATION/recent.json)
-- Daily metadata: `https://raw.githubusercontent.com/GefeiSHEN/NOAA-Aurora-Archive/main/OVATION/metadata/YYYY/MM/DD.json`
+- Daily metadata: `https://raw.githubusercontent.com/GefeiSHEN/NOAA-Aurora-Archive/main/OVATION/YYYY/MM/DD/metadata.json`
 
 Every entry's `path` is **repository-root-relative**, including `OVATION/`. Append it to `https://raw.githubusercontent.com/GefeiSHEN/NOAA-Aurora-Archive/main/` and verify the downloaded SHA-256. Raw URLs may be cached; use a single Git commit SHA instead of `main` for a consistent multi-index view.
 

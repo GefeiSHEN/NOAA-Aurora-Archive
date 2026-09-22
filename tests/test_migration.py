@@ -40,7 +40,7 @@ class MigrationTests(unittest.TestCase):
         self.assertEqual((self.root / self.new_path).read_bytes(), self.body)
         self.assertFalse((self.root / '2026').exists())
         self.assertFalse((self.root / 'metadata').exists())
-        for name in ('latest.json', 'recent.json', 'metadata/2026/09/22.json'):
+        for name in ('latest.json', 'recent.json', '2026/09/22/metadata.json'):
             index = json.loads((self.root / 'OVATION' / name).read_bytes())
             entry = index.get('snapshot') or index['snapshots'][0]
             self.assertEqual(entry, {**self.entry, 'path': self.new_path})

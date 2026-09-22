@@ -123,8 +123,8 @@ class ArchiveTests(unittest.TestCase):
 
     def test_metadata_day_uses_forecast_date(self):
         self.save(raw(fixture(forecast='2026-09-23T00:35:00Z')))
-        self.assertTrue((self.root / 'OVATION/metadata/2026/09/23.json').exists())
-        self.assertFalse((self.root / 'OVATION/metadata/2026/09/22.json').exists())
+        self.assertTrue((self.root / 'OVATION/2026/09/23/metadata.json').exists())
+        self.assertFalse((self.root / 'OVATION/metadata').exists())
 
     def test_recent_prunes_on_unchanged_response_without_refreshing_collection(self):
         self.save()
