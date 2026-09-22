@@ -45,3 +45,20 @@ The earlier deployment evidence was insufficient to establish a working five-min
 The second publication occurred at 17:47:01 UTC with no additional dispatch. Public `latest.json` served `2026/09/22/20260922T173500Z.json`; its SHA-256 is `61d588f006f4dbf5aeac7e5ca6991a136ed5d547fbbfe1372765c7ca37808f31`. This verifies recurring collection inside the running session. A slot with identical NOAA bytes creates no commit.
 
 At 17:47 UTC there was no queued scheduled successor. Session handoff and uninterrupted long-term coverage remain unverified. A session lasts up to 340 minutes plus completion of its final bounded collection; if GitHub fails to supply another run before it exits, a gap is still possible. The mitigation does not repair or guarantee GitHub's scheduler.
+
+## Six-minute debugging — 2026-09-22
+
+[PR #3](https://github.com/GefeiSHEN/NOAA-Aurora-Archive/pull/3) shortened sessions to six minutes, with an eight-minute collection-job safety cap. The obsolete long session was canceled so it could not block the debug run.
+
+[Run 35767726079](https://github.com/GefeiSHEN/NOAA-Aurora-Archive/actions/runs/35767726079) completed successfully: job start `18:32:05Z`, finish `18:38:19Z`, elapsed **6 minutes 14 seconds** including setup/cleanup. No successor was queued or running at completion. This confirmed that shortening a run did not itself supply automatic continuation.
+
+[PR #4](https://github.com/GefeiSHEN/NOAA-Aurora-Archive/pull/4) added an explicit native Actions handoff after a successful collection. The handoff uses the built-in token in a separate `actions: write` job; there is no personal token or external scheduler. The exact original cron remains a recovery trigger. Hosted checks passed all 21 tests. The successor run's event, actor, source run ID, and start time must be checked independently from a successful dispatch request.
+
+### Verified automatic successor
+
+- Source [35768554781](https://github.com/GefeiSHEN/NOAA-Aurora-Archive/actions/runs/35768554781): collection job `18:38:58Z`–`18:45:09Z` (**6 minutes 11 seconds**); handoff job `18:45:11Z`–`18:45:15Z`. Both succeeded.
+- Successor [35769270006](https://github.com/GefeiSHEN/NOAA-Aurora-Archive/actions/runs/35769270006): created `18:45:14Z`, collection job started `18:45:18Z`, actor **github-actions[bot]**, event **workflow_dispatch**, title `NOAA OVATION — workflow_dispatch (handoff from 35768554781) — main`.
+- The successor passed all 21 tests, entered collection, and published commit `f54ec6d` with collection time `18:45:26Z`, observation `18:35:00Z`, forecast `20:05:00Z`, and SHA-256 `cadee7cc4da361876b4f09f2d09c28a08ecab0d4daaa5f7664ce178c1c3522a8`.
+- No user/agent manual dispatch started this successor. Its predecessor requested it using the built-in Actions token. This verifies one full automatic handoff and data publication by the successor; it does not establish a reliability guarantee for future outages.
+
+The six-minute debug duration remains deployed. Successful sessions continue the native handoff chain; failed or canceled sessions do not. Cron remains enabled as recovery. Disable the workflow and cancel active/pending runs to stop collection.

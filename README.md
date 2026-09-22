@@ -2,7 +2,7 @@
 
 A byte-preserving archive of NOAA's numeric, global OVATION aurora forecast JSON for AuroraWatch. The collector uses Python 3.11+ and its standard library. It does not modify the AuroraWatch app.
 
-**Deployment status (2026-09-22):** hosted collection and publication are verified, including [a scheduled run at 14:01 UTC](https://github.com/GefeiSHEN/NOAA-Aurora-Archive/actions/runs/35737401306). However, only one scheduled run appeared during the first eight hours; the requested five-minute job-start cadence was not achieved. Automatic runs now use bounded collection sessions to tolerate gaps between GitHub scheduler events. See `VERIFICATION.md` for evidence and limits; a manual catch-up does not verify automatic triggering.
+**Deployment status (2026-09-22):** six-minute collection sessions and a native automatic handoff are deployed. [Run 35768554781](https://github.com/GefeiSHEN/NOAA-Aurora-Archive/actions/runs/35768554781) completed and its Actions token started [successor 35769270006](https://github.com/GefeiSHEN/NOAA-Aurora-Archive/actions/runs/35769270006), whose actor is `github-actions[bot]`. The successor collected and published a new snapshot at `18:45:26Z`. The original cron remains enabled as recovery; its sparse triggering alone did not provide the requested cadence. See `VERIFICATION.md` for exact timings and remaining outage limits.
 
 Source: <https://services.swpc.noaa.gov/json/ovation_aurora_latest.json>
 
