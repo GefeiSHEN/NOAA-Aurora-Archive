@@ -196,9 +196,8 @@ def archive(root, body, received, now=None):
     digest = hashlib.sha256(body).hexdigest()
     base = snapshot_path(info['forecast_time'])
     # Forecast time is the canonical identity and metadata partition.
-    day = Path(base).parent.relative_to(ARCHIVE_DIR)
     archive_root = root / ARCHIVE_DIR
-    metadata_path = archive_root / 'metadata' / day.with_suffix('.json')
+    metadata_path = root / Path(base).parent / 'metadata.json'
     metadata = read_json(metadata_path, {'schema_version': 1, 'snapshots': []})
     old_latest = read_json(archive_root / 'latest.json', {'schema_version': 1, 'snapshot': None})
     old_recent = read_json(archive_root / 'recent.json', {'schema_version': 1, 'window_hours': 24, 'snapshots': []})
