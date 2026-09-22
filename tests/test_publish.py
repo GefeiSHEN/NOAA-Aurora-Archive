@@ -32,7 +32,7 @@ class PublicationTests(unittest.TestCase):
             (repo / 'README.md').write_text('unsaved user changes')
             def conflict(attempt):
                 if attempt == 0:
-                    collect.archive(other, raw(fixture('2026-09-22T01:00:00Z')),
+                    collect.archive(other, raw(fixture('2026-09-22T01:00:00Z', '2026-09-22T01:40:00Z')),
                                     collect.receipt(NOW + timedelta(minutes=5), {}))
                     git(other, 'add', '.')
                     git(other, 'commit', '-m', 'data(ovation): competing snapshot')
@@ -40,9 +40,9 @@ class PublicationTests(unittest.TestCase):
             self.assertTrue(publish.publish(repo, 'main', raw(), collect.receipt(NOW, {}),
                                             sleep=lambda _: None, before_push=conflict))
             git(other, 'pull', '--ff-only')
-            self.assertTrue((other / '2026/09/22/20260922T005500Z.json').exists())
-            self.assertTrue((other / '2026/09/22/20260922T010000Z.json').exists())
-            latest = collect.read_json(other / 'latest.json', {})['snapshot']
+            self.assertTrue((other / 'OVATION/2026/09/22/20260922T013500Z.json').exists())
+            self.assertTrue((other / 'OVATION/2026/09/22/20260922T014000Z.json').exists())
+            latest = collect.read_json(other / 'OVATION/latest.json', {})['snapshot']
             self.assertEqual(latest['observation_time'], '2026-09-22T01:00:00Z')
             self.assertEqual(git(repo, 'rev-parse', 'HEAD'), original_head)
             self.assertEqual((repo / 'README.md').read_text(), 'unsaved user changes')

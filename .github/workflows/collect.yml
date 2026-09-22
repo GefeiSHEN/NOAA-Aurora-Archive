@@ -9,18 +9,22 @@ on:
   push:
     branches: [main]
     paths:
-      - '.github/workflows/collect.yml'
+      - '.github/workflows/collect*.yml'
       - 'scripts/**'
   workflow_dispatch:
     inputs:
       continue_collection:
-        description: Automatically start another six-minute session after success
+        description: Automatically start another daily collection cycle after success
         type: boolean
         default: true
       predecessor_run_id:
         description: Source run ID supplied by automatic handoff (leave empty for manual runs)
         type: string
         default: ''
+      cycle_seconds:
+        description: Collection window in seconds (86370 normally; shorten only for verification)
+        type: number
+        default: 86370
 
 permissions:
   contents: read
@@ -30,14 +34,14 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  collect:
+  prepare:
     # Never spend private-repository runner minutes or publish from a feature branch.
     if: github.event.repository.private == false && github.ref_name == github.event.repository.default_branch
     runs-on: ubuntu-latest
-    # Six-minute debug session plus checkout and shutdown headroom.
-    timeout-minutes: 8
-    permissions:
-      contents: write
+    timeout-minutes: 5
+    outputs:
+      deadline: ${{ steps.plan.outputs.deadline }}
+      segment_seconds: ${{ steps.plan.outputs.segment_seconds }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5, Node 24
         with:
@@ -45,14 +49,65 @@ jobs:
           fetch-depth: 1
       - name: Test collector and publication
         run: python3 -m unittest discover -s tests -v
-      - name: Collect automatically at UTC minutes 2, 7, 12, …, 57
+      - name: Plan a 23-hour 59-minute 30-second collection window
+        id: plan
         env:
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-        run: python3 -u scripts/session.py --branch "$DEFAULT_BRANCH" --minutes 6
+          CYCLE_SECONDS: ${{ inputs.cycle_seconds }}
+        run: python3 scripts/cycle.py --seconds "${CYCLE_SECONDS:-86370}" >> "$GITHUB_OUTPUT"
+
+  collect_1:
+    name: Collect 1 of 5
+    needs: prepare
+    permissions:
+      contents: write
+    uses: ./.github/workflows/collect-segment.yml
+    with:
+      deadline: ${{ needs.prepare.outputs.deadline }}
+      seconds: ${{ fromJSON(needs.prepare.outputs.segment_seconds) }}
+
+  collect_2:
+    name: Collect 2 of 5
+    needs: [prepare, collect_1]
+    permissions:
+      contents: write
+    uses: ./.github/workflows/collect-segment.yml
+    with:
+      deadline: ${{ needs.prepare.outputs.deadline }}
+      seconds: ${{ fromJSON(needs.prepare.outputs.segment_seconds) }}
+
+  collect_3:
+    name: Collect 3 of 5
+    needs: [prepare, collect_2]
+    permissions:
+      contents: write
+    uses: ./.github/workflows/collect-segment.yml
+    with:
+      deadline: ${{ needs.prepare.outputs.deadline }}
+      seconds: ${{ fromJSON(needs.prepare.outputs.segment_seconds) }}
+
+  collect_4:
+    name: Collect 4 of 5
+    needs: [prepare, collect_3]
+    permissions:
+      contents: write
+    uses: ./.github/workflows/collect-segment.yml
+    with:
+      deadline: ${{ needs.prepare.outputs.deadline }}
+      seconds: ${{ fromJSON(needs.prepare.outputs.segment_seconds) }}
+
+  collect_5:
+    name: Collect 5 of 5
+    needs: [prepare, collect_4]
+    permissions:
+      contents: write
+    uses: ./.github/workflows/collect-segment.yml
+    with:
+      deadline: ${{ needs.prepare.outputs.deadline }}
+      seconds: ${{ fromJSON(needs.prepare.outputs.segment_seconds) }}
 
   handoff:
-    name: Start next session automatically
-    needs: collect
+    name: Start next daily cycle automatically
+    needs: collect_5
     if: github.event.repository.private == false && github.ref_name == github.event.repository.default_branch && (github.event_name != 'workflow_dispatch' || inputs.continue_collection)
     runs-on: ubuntu-latest
     timeout-minutes: 2
