@@ -18,7 +18,7 @@ def next_slot(now):
     return datetime.fromtimestamp(((epoch - 120) // 300 + 1) * 300 + 120, UTC)
 
 
-def run(collect, minutes=340, clock=lambda: datetime.now(UTC),
+def run(collect, minutes=6, clock=lambda: datetime.now(UTC),
         monotonic=time.monotonic, sleep=time.sleep):
     if not 0 < minutes <= 340:
         raise ValueError('session must last between 1 and 340 minutes')
@@ -41,7 +41,7 @@ def run(collect, minutes=340, clock=lambda: datetime.now(UTC),
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--branch', required=True)
-    parser.add_argument('--minutes', type=int, default=340)
+    parser.add_argument('--minutes', type=int, default=6)
     args = parser.parse_args()
     publisher = Path(__file__).with_name('publish.py')
     def collect():
