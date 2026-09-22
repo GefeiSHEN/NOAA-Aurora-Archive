@@ -27,11 +27,11 @@ class ValidationTests(unittest.TestCase):
     def test_complete_grid_and_utc_path(self):
         info = collect.validate(raw())
         self.assertEqual(info['observation_time'], '2026-09-22T00:55:00Z')
-        self.assertEqual(collect.snapshot_path(info['observation_time']),
-                         '2026/09/22/20260922T005500Z.json')
-        data = fixture('2026-09-22T01:55:00+02:00', '2026-09-22T02:35:00+02:00')
-        self.assertEqual(collect.snapshot_path(collect.validate(raw(data))['observation_time']),
-                         '2026/09/21/20260921T235500Z.json')
+        self.assertEqual(collect.snapshot_path(info['forecast_time']),
+                         'OVATION/2026/09/22/20260922T013500Z.json')
+        data = fixture('2026-09-22T00:55:00+02:00', '2026-09-22T01:35:00+02:00')
+        self.assertEqual(collect.snapshot_path(collect.validate(raw(data))['forecast_time']),
+                         'OVATION/2026/09/21/20260921T233500Z.json')
 
     def test_reject_bad_timestamps(self):
         for value in ('bad', '2026-09-22', '2026-09-22T00:55:00',
@@ -79,7 +79,7 @@ class ArchiveTests(unittest.TestCase):
     def test_preserves_bytes_metadata_and_duplicate_noop(self):
         body = raw() + b'\n'
         self.assertTrue(self.save(body))
-        entry = json.loads((self.root / 'latest.json').read_text())['snapshot']
+        entry = json.loads((self.root / 'OVATION/latest.json').read_text())['snapshot']
         self.assertEqual((self.root / entry['path']).read_bytes(), body)
         self.assertEqual(entry['sha256'], hashlib.sha256(body).hexdigest())
         self.assertEqual(entry['http_validators']['etag'], '"abc"')
@@ -94,27 +94,43 @@ class ArchiveTests(unittest.TestCase):
         data['coordinates'][0][2] = 10
         revised = raw(data)
         self.save(revised, NOW + timedelta(minutes=5))
-        entry = json.loads((self.root / 'latest.json').read_text())['snapshot']
+        entry = json.loads((self.root / 'OVATION/latest.json').read_text())['snapshot']
         self.assertTrue(entry['path'].endswith('-' + hashlib.sha256(revised).hexdigest() + '.json'))
-        self.assertEqual(original['2026/09/22/20260922T005500Z.json'],
-                         (self.root / '2026/09/22/20260922T005500Z.json').read_bytes())
+        self.assertEqual(original['OVATION/2026/09/22/20260922T013500Z.json'],
+                         (self.root / 'OVATION/2026/09/22/20260922T013500Z.json').read_bytes())
         before = self.state()
         self.assertFalse(self.save(now=NOW + timedelta(minutes=10)))
         self.assertEqual(before, self.state())
 
     def test_latest_does_not_regress_and_recent_orders_by_collection(self):
         self.save()
-        self.save(raw(fixture('2026-09-21T23:50:00Z')), NOW + timedelta(minutes=1))
-        latest = json.loads((self.root / 'latest.json').read_text())['snapshot']
-        recent = json.loads((self.root / 'recent.json').read_text())['snapshots']
+        self.save(raw(fixture('2026-09-22T01:00:00Z', '2026-09-22T01:30:00Z')),
+                  NOW + timedelta(minutes=1))
+        latest = json.loads((self.root / 'OVATION/latest.json').read_text())['snapshot']
+        recent = json.loads((self.root / 'OVATION/recent.json').read_text())['snapshots']
         self.assertEqual(latest['observation_time'], '2026-09-22T00:55:00Z')
-        self.assertEqual(recent[0]['observation_time'], '2026-09-21T23:50:00Z')
+        self.assertEqual(latest['forecast_time'], '2026-09-22T01:35:00Z')
+        self.assertEqual(recent[0]['forecast_time'], '2026-09-22T01:30:00Z')
+
+    def test_same_forecast_new_observation_is_a_revision(self):
+        self.save()
+        body = raw(fixture('2026-09-22T01:00:00Z'))
+        self.save(body, NOW + timedelta(minutes=5))
+        entry = json.loads((self.root / 'OVATION/latest.json').read_bytes())['snapshot']
+        self.assertEqual(entry['path'], 'OVATION/2026/09/22/20260922T013500Z-' +
+                         hashlib.sha256(body).hexdigest() + '.json')
+        self.assertFalse((self.root / 'OVATION/2026/09/22/20260922T010000Z.json').exists())
+
+    def test_metadata_day_uses_forecast_date(self):
+        self.save(raw(fixture(forecast='2026-09-23T00:35:00Z')))
+        self.assertTrue((self.root / 'OVATION/metadata/2026/09/23.json').exists())
+        self.assertFalse((self.root / 'OVATION/metadata/2026/09/22.json').exists())
 
     def test_recent_prunes_on_unchanged_response_without_refreshing_collection(self):
         self.save()
         self.assertTrue(self.save(now=NOW + timedelta(hours=24, seconds=1)))
-        self.assertEqual(json.loads((self.root / 'recent.json').read_text())['snapshots'], [])
-        self.assertEqual(json.loads((self.root / 'latest.json').read_text())['snapshot']['collected_at'],
+        self.assertEqual(json.loads((self.root / 'OVATION/recent.json').read_text())['snapshots'], [])
+        self.assertEqual(json.loads((self.root / 'OVATION/latest.json').read_text())['snapshot']['collected_at'],
                          '2026-09-22T01:00:00Z')
 
     def test_invalid_response_leaves_every_file_unchanged(self):
@@ -136,14 +152,14 @@ class ArchiveTests(unittest.TestCase):
     def test_exact_recent_boundary_is_inclusive(self):
         self.save()
         self.assertFalse(self.save(now=NOW + timedelta(hours=24)))
-        self.assertEqual(len(json.loads((self.root / 'recent.json').read_text())['snapshots']), 1)
+        self.assertEqual(len(json.loads((self.root / 'OVATION/recent.json').read_text())['snapshots']), 1)
 
     def test_delayed_receipt_cannot_replace_newer_revision(self):
         data = fixture()
         data['coordinates'][0][2] = 5
         self.save(raw(data), NOW + timedelta(minutes=10))
         collect.archive(self.root, raw(), collect.receipt(NOW, {}), now=NOW + timedelta(minutes=11))
-        latest = json.loads((self.root / 'latest.json').read_text())['snapshot']
+        latest = json.loads((self.root / 'OVATION/latest.json').read_text())['snapshot']
         self.assertEqual(latest['sha256'], hashlib.sha256(raw(data)).hexdigest())
 
 

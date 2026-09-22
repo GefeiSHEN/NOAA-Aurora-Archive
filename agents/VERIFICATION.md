@@ -1,5 +1,9 @@
 # Initial verification — 2026-09-22
 
+Internal historical record. Paths and deployment statements below describe the
+referenced commits at verification time. See the root README for the current
+`OVATION/` layout, consumer URLs, and operation.
+
 - `python3 -m unittest discover -s tests -v`: **15 tests passed** on Python 3.12 locally. Fixtures are generated in tests and never enter the real archive.
 - Integration test uses a local bare Git remote and a competing writer to force a rejected push. Retrying preserves both snapshots, retains the newer latest pointer, and leaves the original checkout and its uncommitted file untouched. Publishing the same bytes again makes no commit.
 - Both workflow YAML files parse successfully. The initial implementation also passed all 15 tests on a standard GitHub-hosted Linux runner: [PR CI run](https://github.com/GefeiSHEN/NOAA-Aurora-Archive/actions/runs/35708573451). The PR checks track validation of subsequent commits.

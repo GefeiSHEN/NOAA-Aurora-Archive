@@ -17,6 +17,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 SOURCE = 'https://services.swpc.noaa.gov/json/ovation_aurora_latest.json'
+ARCHIVE_DIR = Path('OVATION')
 UTC = timezone.utc
 MAX_BYTES = 5 * 1024 * 1024
 RETRY_DELAYS = (15, 30, 60)
@@ -88,8 +89,9 @@ def validate(body):
     return {'observation_time': iso(observation), 'forecast_time': iso(forecast)}
 
 
-def snapshot_path(observation):
-    return timestamp(observation).strftime('%Y/%m/%d/%Y%m%dT%H%M%SZ.json')
+def snapshot_path(forecast):
+    return (ARCHIVE_DIR / timestamp(forecast).strftime(
+        '%Y/%m/%d/%Y%m%dT%H%M%SZ.json')).as_posix()
 
 
 def receipt(collected_at, headers):
@@ -176,11 +178,11 @@ def atomic_write(path, body):
 
 
 def latest_key(entry):
-    return entry['observation_time'], entry['collected_at'], entry['sha256']
+    return entry['forecast_time'], entry['collected_at'], entry['sha256']
 
 
 def recent_key(entry):
-    return entry['collected_at'], entry['observation_time'], entry['sha256']
+    return entry['collected_at'], entry['forecast_time'], entry['sha256']
 
 
 def archive(root, body, received, now=None):
@@ -192,12 +194,14 @@ def archive(root, body, received, now=None):
     if received['source_url'] != SOURCE:
         raise ValueError('unexpected receipt source')
     digest = hashlib.sha256(body).hexdigest()
-    base = snapshot_path(info['observation_time'])
-    # Shard the durable metadata by observation date, avoiding a growing global index.
-    metadata_path = root / 'metadata' / (base[:10] + '.json')
+    base = snapshot_path(info['forecast_time'])
+    # Forecast time is the canonical identity and metadata partition.
+    day = Path(base).parent.relative_to(ARCHIVE_DIR)
+    archive_root = root / ARCHIVE_DIR
+    metadata_path = archive_root / 'metadata' / day.with_suffix('.json')
     metadata = read_json(metadata_path, {'schema_version': 1, 'snapshots': []})
-    old_latest = read_json(root / 'latest.json', {'schema_version': 1, 'snapshot': None})
-    old_recent = read_json(root / 'recent.json', {'schema_version': 1, 'window_hours': 24, 'snapshots': []})
+    old_latest = read_json(archive_root / 'latest.json', {'schema_version': 1, 'snapshot': None})
+    old_recent = read_json(archive_root / 'recent.json', {'schema_version': 1, 'window_hours': 24, 'snapshots': []})
     entries = metadata['snapshots']
     duplicate = next((e for e in entries if e['sha256'] == digest), None)
     pending = []
@@ -225,7 +229,8 @@ def archive(root, body, received, now=None):
               'snapshots': sorted((e for e in recent_entries.values()
                                    if cutoff <= timestamp(e['collected_at']) <= now),
                                   key=recent_key, reverse=True)}
-    pending.extend([(root / 'latest.json', encode(latest)), (root / 'recent.json', encode(recent))])
+    pending.extend([(archive_root / 'latest.json', encode(latest)),
+                    (archive_root / 'recent.json', encode(recent))])
     changed = False
     for path, content in pending:
         changed = atomic_write(path, content) or changed
