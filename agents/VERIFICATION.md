@@ -66,3 +66,19 @@ At 17:47 UTC there was no queued scheduled successor. Session handoff and uninte
 - No user/agent manual dispatch started this successor. Its predecessor requested it using the built-in Actions token. This verifies one full automatic handoff and data publication by the successor; it does not establish a reliability guarantee for future outages.
 
 The six-minute debug duration remains deployed. Successful sessions continue the native handoff chain; failed or canceled sessions do not. Cron remains enabled as recovery. Disable the workflow and cancel active/pending runs to stop collection.
+
+## Canonical forecast archive and daily cycles — 2026-09-22
+
+[PR #5](https://github.com/GefeiSHEN/NOAA-Aurora-Archive/pull/5) supersedes the earlier root layout, observation-time naming, five-minute polling, and six-minute debug setting.
+
+- Moved this history under `agents/`; root user documentation remains `README.md`.
+- Migrated all **21** source snapshots from commit `d9eb94e` into `OVATION/YYYY/MM/DD/`, naming and partitioning them by NOAA **Forecast Time**. Every payload SHA-256 and every metadata field except `path` remained unchanged. All index references resolved, and collecting a migrated duplicate remained a no-op. Git identified every payload move as a 100% rename.
+- Forecast time now identifies a frame and orders `latest.json`; changed content for the same target time remains a hash-suffixed revision. Observation and collection times are retained separately.
+- Polling now targets every even UTC minute. Each cycle plans **86,370 seconds**, divided across five sequential Linux jobs sharing one deadline. Queue/setup time reduces the remaining collection window; workflow cleanup/handoff may add elapsed time afterward.
+- **32 tests passed** locally and in hosted CI, including migration integrity/conflicts, forecast-date boundaries and revisions, UTC polling, and shared cycle deadlines.
+- Shortened live validation [35773035388](https://github.com/GefeiSHEN/NOAA-Aurora-Archive/actions/runs/35773035388) used a 180-second window. Preparation, all five segments, and the automatic handoff succeeded. The final segment correctly returned after the shared deadline; it did not start an extra collection window.
+- Segment logs show collection at `19:20:00Z`, an unchanged-response no-op, and the next UTC target `19:22:00Z`. A new served file `OVATION/2026/09/22/20260922T203900Z.json` was verified against its body Forecast Time (`20:39:00Z`), Observation Time (`19:10:00Z`), collection time (`19:19:44Z`), and hash.
+- The bot started normal successor [35773398894](https://github.com/GefeiSHEN/NOAA-Aurora-Archive/actions/runs/35773398894) at `19:22:44Z`. Its preparation log confirms `CYCLE_SECONDS: 86370`; 32 tests passed and the first segment started at `19:23:04Z`. No shortened duration was carried into the successor.
+- Both public `OVATION/latest.json` and `OVATION/recent.json` were fetched successfully; their paths include `OVATION/`. The latest served forecast-time payload's hash was verified. The full daily cycle was still running at verification; its complete 23h 59m 30s duration has not yet elapsed.
+
+Collection was intentionally paused for migration. The final old collection completed successfully at `19:17:01Z`; only its pending continuation was canceled. The workflow was re-enabled after merge, and the normal daily successor is active.
