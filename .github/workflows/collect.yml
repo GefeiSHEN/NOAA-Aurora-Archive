@@ -1,0 +1,33 @@
+name: Collect NOAA OVATION
+
+on:
+  schedule:
+    - cron: '2-59/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: noaa-ovation-archive
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    # Never spend private-repository runner minutes or publish from a feature branch.
+    if: github.event.repository.private == false && github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5, Node 24
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 1
+      - name: Test collector and publication
+        run: python3 -m unittest discover -s tests -v
+      - name: Collect and publish with conflict retries
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: python3 scripts/publish.py --branch "$DEFAULT_BRANCH"
