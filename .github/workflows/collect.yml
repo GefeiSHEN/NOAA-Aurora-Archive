@@ -25,7 +25,8 @@ jobs:
     # Never spend private-repository runner minutes or publish from a feature branch.
     if: github.event.repository.private == false && github.ref_name == github.event.repository.default_branch
     runs-on: ubuntu-latest
-    timeout-minutes: 355
+    # Six-minute debug session plus checkout and shutdown headroom.
+    timeout-minutes: 8
     permissions:
       contents: write
     steps:
@@ -35,13 +36,7 @@ jobs:
           fetch-depth: 1
       - name: Test collector and publication
         run: python3 -m unittest discover -s tests -v
-      - name: Collect and publish with conflict retries
-        if: github.event_name == 'workflow_dispatch'
-        env:
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-        run: python3 scripts/publish.py --branch "$DEFAULT_BRANCH"
       - name: Collect automatically at UTC minutes 2, 7, 12, …, 57
-        if: github.event_name != 'workflow_dispatch'
         env:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-        run: python3 -u scripts/session.py --branch "$DEFAULT_BRANCH" --minutes 340
+        run: python3 -u scripts/session.py --branch "$DEFAULT_BRANCH" --minutes 6
