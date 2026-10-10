@@ -48,6 +48,16 @@ class PublicationTests(unittest.TestCase):
             self.assertEqual((repo / 'README.md').read_text(), 'unsaved user changes')
             self.assertFalse(publish.publish(repo, 'main', raw(), collect.receipt(NOW, {})))
 
+    def test_git_diagnostic_keeps_reason_but_not_remotes(self):
+        stderr = ('To https://x-access-token:secret@github.com/owner/repo\n'
+                  ' ! [rejected] HEAD -> main (fetch first)\n'
+                  'error: failed to push some refs to https://x-access-token:secret@github.com/owner/repo\n')
+        line = publish.diagnostic(stderr)
+        self.assertIn('failed to push some refs', line)
+        self.assertNotIn('secret', line)
+        self.assertNotIn('github.com', line)
+        self.assertEqual(publish.diagnostic(''), '')
+
 
 if __name__ == '__main__':
     unittest.main()

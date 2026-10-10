@@ -2,6 +2,7 @@
 """Publish through disposable worktrees; never reset or force-push a user's checkout."""
 import argparse
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -13,16 +14,29 @@ except ImportError:
     import collect
 
 
+def diagnostic(stderr):
+    """Last line of Git's stderr with URLs and credentials removed."""
+    lines = [line.strip() for line in stderr.splitlines() if line.strip()]
+    if not lines:
+        return ''
+    line = re.sub(r'[a-z][a-z0-9+.-]*://\S+', '<url>', lines[-1], flags=re.I)
+    line = re.sub(r'\S+@\S+', '<redacted>', line)
+    line = re.sub(r'(?i)(token|password|authorization)\S*', '<redacted>', line)
+    return line[:200]
+
+
 def git(repo, *args):
     result = subprocess.run(['git', '-C', str(repo), *args], stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE, timeout=60, text=True)
     if result.returncode:
-        # Do not echo remotes/credentials from Git's diagnostic output.
-        raise RuntimeError(f'git {args[0]} failed (exit {result.returncode})')
+        # Report only a redacted line so the cause is visible without echoing remotes.
+        reason = diagnostic(result.stderr)
+        raise RuntimeError(f'git {args[0]} failed (exit {result.returncode})'
+                           + (f': {reason}' if reason else ''))
     return result.stdout.strip()
 
 
-def publish(repo, branch, body, received, attempts=3, sleep=time.sleep, before_push=None):
+def publish(repo, branch, body, received, attempts=4, sleep=time.sleep, before_push=None):
     collect.validate(body)
     git(repo, 'check-ref-format', 'refs/heads/' + branch)
     target = 'refs/heads/' + branch
@@ -52,8 +66,9 @@ def publish(repo, branch, body, received, attempts=3, sleep=time.sleep, before_p
         except RuntimeError as exc:
             last_error = exc
         if attempt < attempts - 1:
-            print(f'publication attempt {attempt + 1} failed; retrying from remote head', file=sys.stderr)
-            sleep(5 * (attempt + 1))
+            print(f'publication attempt {attempt + 1} failed: {last_error}; retrying from remote head',
+                  file=sys.stderr)
+            sleep(15 * (attempt + 1))  # About 90 seconds in total, inside the 600-second budget.
     raise RuntimeError(f'publication failed after {attempts} attempts: {last_error}')
 
 
