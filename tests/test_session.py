@@ -44,17 +44,30 @@ class SessionTests(unittest.TestCase):
         self.run_session(clock, collect, minutes=15)
         self.assertEqual([d.strftime('%H:%M') for d in calls], ['17:42', '17:50'])
 
-    def test_noop_continues_and_failure_stops_visibly(self):
+    def test_isolated_failure_does_not_end_session(self):
         clock = Clock(datetime(2026, 9, 22, 17, 42, tzinfo=timezone.utc))
         calls = []
         def collect(_):
             calls.append(clock.now)
-            if len(calls) == 2:
+            if len(calls) in (2, 4):
+                raise RuntimeError('retries exhausted')
+            return False
+        self.run_session(clock, collect)
+        self.assertEqual([d.strftime('%H:%M') for d in calls],
+                         ['17:42', '17:44', '17:46', '17:48', '17:50', '17:52'])
+
+    def test_repeated_failures_stop_visibly(self):
+        clock = Clock(datetime(2026, 9, 22, 17, 42, tzinfo=timezone.utc))
+        calls = []
+        def collect(_):
+            calls.append(clock.now)
+            if len(calls) >= 2:
                 raise RuntimeError('retries exhausted')
             return False
         with self.assertRaisesRegex(RuntimeError, 'retries exhausted'):
-            self.run_session(clock, collect)
-        self.assertEqual(len(calls), 2)
+            session.run(collect, minutes=60, clock=lambda: clock.now,
+                        monotonic=lambda: clock.elapsed, sleep=clock.sleep, max_failures=3)
+        self.assertEqual(len(calls), 4)
 
     def test_rejects_unbounded_session(self):
         for minutes in (0, -1, 341):

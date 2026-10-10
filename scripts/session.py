@@ -21,15 +21,24 @@ def next_slot(now):
 
 
 def run(collect, minutes=300, until=None, clock=lambda: datetime.now(UTC),
-        monotonic=time.monotonic, sleep=time.sleep):
+        monotonic=time.monotonic, sleep=time.sleep, max_failures=5):
+    """Ride out brief outages; stop visibly after max_failures failures in a row."""
     if not 0 < minutes <= 340:
         raise ValueError('session must last between 1 and 340 minutes')
     started = monotonic()
     global_deadline = started + (until - clock().timestamp()) if until is not None else float('inf')
     deadline = min(started + minutes * 60, global_deadline)
+    failures = 0
     while monotonic() < deadline:
         print(f'Collecting at {clock().isoformat()}', flush=True)
-        collect(min(600, global_deadline - monotonic()))
+        try:
+            collect(min(600, global_deadline - monotonic()))
+            failures = 0
+        except Exception as exc:
+            failures += 1
+            if failures >= max_failures:
+                raise
+            print(f'::warning::Collection failed ({failures} in a row): {exc}', flush=True)
         target = next_slot(clock())
         print(f'Next UTC collection: {target.isoformat()}', flush=True)
         while True:
