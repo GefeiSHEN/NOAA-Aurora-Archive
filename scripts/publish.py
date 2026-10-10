@@ -22,8 +22,14 @@ def git(repo, *args):
     return result.stdout.strip()
 
 
+def sparse_paths(info):
+    """Everything collect.archive() reads or writes for this snapshot, and nothing else."""
+    day = Path(collect.snapshot_path(info['forecast_time'])).parent.as_posix()
+    return ['/.gitattributes', '/OVATION/latest.json', '/OVATION/recent.json', f'/{day}/']
+
+
 def publish(repo, branch, body, received, attempts=3, sleep=time.sleep, before_push=None):
-    collect.validate(body)
+    info = collect.validate(body)
     git(repo, 'check-ref-format', 'refs/heads/' + branch)
     target = 'refs/heads/' + branch
     last_error = None
@@ -33,12 +39,15 @@ def publish(repo, branch, body, received, attempts=3, sleep=time.sleep, before_p
             head = git(repo, 'rev-parse', 'FETCH_HEAD')
             with tempfile.TemporaryDirectory(prefix='ovation-publish-') as temp:
                 work = Path(temp) / 'work'
-                git(repo, 'worktree', 'add', '--detach', str(work), head)
+                # Check out only the files this snapshot touches, not the whole archive.
+                git(repo, 'worktree', 'add', '--no-checkout', '--detach', str(work), head)
                 try:
+                    git(work, 'sparse-checkout', 'set', '--no-cone', *sparse_paths(info))
+                    git(work, 'read-tree', '-mu', 'HEAD')
                     if not collect.archive(work, body, received):
                         print('unchanged: successful no-op')
                         return False
-                    git(work, 'add', '--all')  # Only our archive writes exist in this fresh worktree.
+                    git(work, 'add', '--all')  # Only our archive writes exist in this fresh sparse worktree.
                     git(work, '-c', 'user.name=github-actions[bot]', '-c',
                         'user.email=41898282+github-actions[bot]@users.noreply.github.com',
                         'commit', '-m', 'data(ovation): archive NOAA snapshot')

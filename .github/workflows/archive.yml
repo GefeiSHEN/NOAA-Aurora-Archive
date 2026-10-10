@@ -1,0 +1,42 @@
+name: Archive old OVATION days
+
+on:
+  schedule:
+    # Once a day, after the UTC date rolls over. Missed runs catch up on the next one.
+    - cron: '41 1 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Build and verify archives without uploading or changing main
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  # Separate from the collector, which holds its own group for a whole day.
+  group: noaa-ovation-archiver
+  cancel-in-progress: false
+
+jobs:
+  archive:
+    if: github.event.repository.private == false && github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    # Uploads release assets and commits the folder removals.
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5, Node 24
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 1
+          # The archiver fetches each old day itself; skip the archive here.
+          sparse-checkout: scripts
+      - name: Move days before the 5-day window to release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          DRY_RUN: ${{ inputs.dry_run && '--dry-run' || '' }}
+        run: python3 -u scripts/archive_days.py --branch "$DEFAULT_BRANCH" --keep-days 5 $DRY_RUN

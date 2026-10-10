@@ -48,6 +48,40 @@ class PublicationTests(unittest.TestCase):
             self.assertEqual((repo / 'README.md').read_text(), 'unsaved user changes')
             self.assertFalse(publish.publish(repo, 'main', raw(), collect.receipt(NOW, {})))
 
+    def test_publication_checks_out_only_the_snapshot_day_and_indexes(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            remote, repo = root / 'remote', root / 'repo'
+            def git(path, *args):
+                return publish.git(path, *args)
+            subprocess.run(['git', 'init', '--bare', str(remote)], check=True, capture_output=True)
+            subprocess.run(['git', 'init', '-b', 'main', str(repo)], check=True, capture_output=True)
+            git(repo, 'config', 'user.name', 'Test')
+            git(repo, 'config', 'user.email', 'test@example.invalid')
+            old_day = repo / 'OVATION/2026/09/15'
+            old_day.mkdir(parents=True)
+            (old_day / 'metadata.json').write_text('{}')
+            (repo / 'README.md').write_text('baseline')
+            git(repo, 'add', '.')
+            git(repo, 'commit', '-m', 'chore(repo): baseline')
+            git(repo, 'remote', 'add', 'origin', str(remote))
+            git(repo, 'push', '-u', 'origin', 'main')
+            seen = []
+            def inspect(attempt):
+                work = Path(git(repo, 'worktree', 'list', '--porcelain').split('\n\n')[1]
+                            .splitlines()[0].removeprefix('worktree '))
+                seen.extend(sorted(p.relative_to(work).as_posix() for p in work.rglob('*')
+                                   if p.is_file() and '.git' not in p.parts))
+            self.assertTrue(publish.publish(repo, 'main', raw(), collect.receipt(NOW, {}),
+                                            before_push=inspect))
+            self.assertEqual(seen, ['OVATION/2026/09/22/20260922T013500Z.json',
+                                    'OVATION/2026/09/22/metadata.json',
+                                    'OVATION/latest.json', 'OVATION/recent.json'])
+            tree = git(remote, 'ls-tree', '-r', '--name-only', 'main').splitlines()
+            self.assertIn('OVATION/2026/09/15/metadata.json', tree)
+            self.assertIn('README.md', tree)
+            self.assertIn('OVATION/2026/09/22/20260922T013500Z.json', tree)
+
 
 if __name__ == '__main__':
     unittest.main()
