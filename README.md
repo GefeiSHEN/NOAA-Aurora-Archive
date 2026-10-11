@@ -2,7 +2,7 @@
 
 NOAA's numeric OVATION aurora forecasts, preserved byte-for-byte for both hemispheres and published for AuroraWatch. Python 3.11+ and native GitHub Actions; no third-party Python dependencies.
 
-Source: [NOAA OVATION JSON](https://services.swpc.noaa.gov/json/ovation_aurora_latest.json).
+Source: [NOAA OVATION JSON](https://services.swpc.noaa.gov/json/ovation_aurora_latest.json). See [Data credit](#data-credit).
 
 ## Layout
 
@@ -109,3 +109,11 @@ The collector checks out only `latest.json`, `recent.json` and the snapshot's da
 | `commit` | A commit that still holds the folder; raw URLs at that commit keep working |
 
 Extract with `tar -xJf OVATION-YYYY-MM-DD.tar.xz`; it restores `OVATION/YYYY/MM/DD/` byte for byte, including `metadata.json`. Run the workflow with **dry_run** to build and verify without uploading or changing `main`.
+
+## Data credit
+
+Data: **NOAA Space Weather Prediction Center (SWPC), OVATION Aurora Forecast** ([ovation_aurora_latest.json](https://services.swpc.noaa.gov/json/ovation_aurora_latest.json)). Please keep this credit when you reuse or redistribute the archived snapshots.
+
+The forecasts are a work of the U.S. federal government and are in the public domain in the United States ([17 U.S.C. § 105](https://www.law.cornell.edu/uscode/text/17/105)). This archive stores them unmodified and adds no copyright or license of its own to NOAA's data.
+
+This is an independent project. It is not affiliated with, endorsed by, or operated by NOAA, the National Weather Service, or SWPC, and it is not an official source of space weather forecasts or alerts. For official, current forecasts, use [SWPC](https://www.swpc.noaa.gov/). Data are provided as is, without warranty.
