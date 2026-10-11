@@ -20,9 +20,10 @@ import tempfile
 import time
 
 try:
-    from . import collect
+    from . import collect, publish
 except ImportError:
     import collect
+    import publish
 
 INDEX = 'OVATION/archive.json'
 DAY = re.compile(r'OVATION/(\d{4})/(\d{2})/(\d{2})')
@@ -32,8 +33,10 @@ def git(repo, *args, timeout=600, stdout=subprocess.PIPE, input=None):
     result = subprocess.run(['git', '-C', str(repo), *args], stdout=stdout, stderr=subprocess.PIPE,
                             timeout=timeout, input=input)
     if result.returncode:
-        # Do not echo remotes/credentials from Git's diagnostic output.
-        raise RuntimeError(f'git {args[0]} failed (exit {result.returncode})')
+        # Report only a redacted line so the cause is visible without echoing remotes.
+        reason = publish.diagnostic(result.stderr.decode(errors='replace'))
+        raise RuntimeError(f'git {args[0]} failed (exit {result.returncode})'
+                           + (f': {reason}' if reason else ''))
     return result.stdout.decode().strip() if stdout is subprocess.PIPE else None
 
 

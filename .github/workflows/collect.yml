@@ -68,6 +68,8 @@ jobs:
   collect_2:
     name: Collect 2 of 5
     needs: [prepare, collect_1]
+    # A failed segment must not end the cycle; only a cancel or failed tests do.
+    if: ${{ !cancelled() && needs.prepare.result == 'success' }}
     permissions:
       contents: write
     uses: ./.github/workflows/collect-segment.yml
@@ -78,6 +80,7 @@ jobs:
   collect_3:
     name: Collect 3 of 5
     needs: [prepare, collect_2]
+    if: ${{ !cancelled() && needs.prepare.result == 'success' }}
     permissions:
       contents: write
     uses: ./.github/workflows/collect-segment.yml
@@ -88,6 +91,7 @@ jobs:
   collect_4:
     name: Collect 4 of 5
     needs: [prepare, collect_3]
+    if: ${{ !cancelled() && needs.prepare.result == 'success' }}
     permissions:
       contents: write
     uses: ./.github/workflows/collect-segment.yml
@@ -98,6 +102,7 @@ jobs:
   collect_5:
     name: Collect 5 of 5
     needs: [prepare, collect_4]
+    if: ${{ !cancelled() && needs.prepare.result == 'success' }}
     permissions:
       contents: write
     uses: ./.github/workflows/collect-segment.yml
@@ -107,8 +112,9 @@ jobs:
 
   handoff:
     name: Start next daily cycle automatically
-    needs: collect_5
-    if: github.event.repository.private == false && github.ref_name == github.event.repository.default_branch && (github.event_name != 'workflow_dispatch' || inputs.continue_collection)
+    needs: [prepare, collect_5]
+    # Hand off even after a failed segment; cron fires too rarely to be the only recovery.
+    if: ${{ !cancelled() && needs.prepare.result == 'success' && github.event.repository.private == false && github.ref_name == github.event.repository.default_branch && (github.event_name != 'workflow_dispatch' || inputs.continue_collection) }}
     runs-on: ubuntu-latest
     timeout-minutes: 2
     # The collection job cannot dispatch workflows. This job cannot write files.
