@@ -16,6 +16,7 @@ OVATION/
         metadata.json                    # metadata for this day
   latest.json
   recent.json
+  archive.json                           # days moved to release assets
 scripts/                                 # collection and workflow runtime
 tests/
 agents/                                  # internal history and maintenance
@@ -50,6 +51,8 @@ All indexes have `schema_version: 1` and use these snapshot fields:
 `latest.json` wraps one entry as `{"schema_version": 1, "snapshot": {...}}`. It selects the newest forecast time, then newest collected revision; hash breaks exact ties. An older forecast cannot move it backward, even if its observation time is newer.
 
 `recent.json` uses `{"schema_version": 1, "window_hours": 24, "snapshots": [...]}`. It covers distinct snapshots first collected in the preceding 24 hours at the last successful run, including revisions. Entries are ordered by collection time, forecast time, then hash, descending; the 24-hour boundary is inclusive. Identical responses do not refresh collection times but may prune expired entries.
+
+`main` keeps the current UTC day and the four before it, so the last 72 hours are always there. Older day folders move to release assets (see [Retention](#cost-and-retention)); their `path`s no longer resolve on `main`.
 
 Daily metadata uses `{"schema_version": 1, "snapshots": [...]}`, retaining all entries for that **forecast date**, ordered by forecast time, collection time, then hash, descending. When collection stops or fails, indexes freeze. Consumers must check timestamps against their own current clock; a future forecast time does not prove a recent download.
 
@@ -91,4 +94,18 @@ The local collector writes `/tmp/aurora-preview/OVATION/` and never commits or p
 
 Standard `ubuntu-latest` execution is [free for public repositories](https://docs.github.com/en/billing/concepts/product-billing/github-actions), including waiting between collections. Workflows skip private repositories. There are no paid runners, external schedulers, Actions artifacts/caches, or Git LFS. A cycle uses one active runner slot at a time; free execution does not mean unlimited storage.
 
-All unique snapshots are retained. At roughly 0.9 MB per response and 720 polls/day, uncompressed growth could approach 660 MB/day if every response differs; duplicate responses add no files. Monitor repository size and [GitHub repository limits](https://docs.github.com/en/repositories/creating-and-managing-repositories/repository-limits). Files, metadata, and Git history grow; deleting files does not remove their historical storage. No automatic deletion or history rewriting is configured.
+All unique snapshots are retained; none are deleted. Git delta-compresses the near-identical snapshots, so the stored repository grows about 10 MB/day even though a day's files total about 250 MB. Monitor repository size and [GitHub repository limits](https://docs.github.com/en/repositories/creating-and-managing-repositories/repository-limits). No history rewriting is configured.
+
+The collector checks out only `latest.json`, `recent.json` and the snapshot's day folder, so its disk use and time per poll do not grow with the archive.
+
+**Retention on `main`.** The daily **Archive old OVATION days** workflow (`scripts/archive_days.py`) keeps five day folders on `main`. Each older folder is packed as `OVATION-YYYY-MM-DD.tar.xz` (about 1–3 MB) on the release `ovation-YYYY-MM`. The folder is removed from `main` only after the asset is uploaded, downloaded back, and every file in it matches the Git blob it came from. `OVATION/archive.json` lists each archived day newest first:
+
+| Field | Meaning |
+| --- | --- |
+| `date`, `path` | Forecast date and the folder it came from |
+| `release`, `asset`, `url` | Where to download the tarball |
+| `sha256`, `bytes`, `files` | Digest and size of the tarball, number of files inside |
+| `tree` | Git tree of the folder; unchanged folders only are removed |
+| `commit` | A commit that still holds the folder; raw URLs at that commit keep working |
+
+Extract with `tar -xJf OVATION-YYYY-MM-DD.tar.xz`; it restores `OVATION/YYYY/MM/DD/` byte for byte, including `metadata.json`. Run the workflow with **dry_run** to build and verify without uploading or changing `main`.
