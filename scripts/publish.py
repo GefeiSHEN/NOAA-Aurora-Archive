@@ -25,9 +25,9 @@ def diagnostic(stderr):
     return line[:200]
 
 
-def git(repo, *args):
+def git(repo, *args, input=None):
     result = subprocess.run(['git', '-C', str(repo), *args], stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE, timeout=60, text=True)
+                            stderr=subprocess.PIPE, timeout=60, text=True, input=input)
     if result.returncode:
         # Report only a redacted line so the cause is visible without echoing remotes.
         reason = diagnostic(result.stderr)
@@ -42,13 +42,40 @@ def sparse_paths(info):
     return ['/.gitattributes', '/OVATION/latest.json', '/OVATION/recent.json', f'/{day}/']
 
 
-def publish(repo, branch, body, received, attempts=4, sleep=time.sleep, before_push=None):
+BOT = ['-c', 'user.name=github-actions[bot]',
+       '-c', 'user.email=41898282+github-actions[bot]@users.noreply.github.com']
+
+
+def seed(repo, branch, source):
+    """Start a missing data branch as one parentless commit holding source's OVATION/ folder."""
+    git(repo, 'fetch', '--no-tags', '--depth=1', 'origin', 'refs/heads/' + source)
+    head = git(repo, 'rev-parse', 'FETCH_HEAD')
+    entries = [line for line in git(repo, 'ls-tree', head).splitlines()
+               if line.split('\t', 1)[1] in ('.gitattributes', 'OVATION')]
+    if not any(line.endswith('\tOVATION') for line in entries):
+        # Never start an empty archive; a missing data branch after the move needs a person.
+        raise RuntimeError(f'{branch} does not exist and {source} has no OVATION/ to start it from')
+    # The collector's clone is blobless; every entry is already reachable from source.
+    tree = git(repo, 'mktree', '--missing', input='\n'.join(entries) + '\n')
+    commit = git(repo, *BOT, 'commit-tree', tree, '-m',
+                 f'data(ovation): start the {branch} branch from {source} at {head}')
+    # An empty lease means the branch must still not exist, so a concurrent start wins cleanly.
+    git(repo, 'push', f'--force-with-lease=refs/heads/{branch}:', 'origin',
+        f'{commit}:refs/heads/{branch}')
+    print(f'started {branch} from {source} at {head}')
+
+
+def publish(repo, branch, body, received, attempts=4, sleep=time.sleep, before_push=None,
+            seed_from=None):
     info = collect.validate(body)
     git(repo, 'check-ref-format', 'refs/heads/' + branch)
     target = 'refs/heads/' + branch
     last_error = None
     for attempt in range(attempts):
         try:
+            if seed_from and seed_from != branch and not git(repo, 'ls-remote', '--heads',
+                                                              'origin', target):
+                seed(repo, branch, seed_from)
             git(repo, 'fetch', '--no-tags', '--depth=1', 'origin', target)
             head = git(repo, 'rev-parse', 'FETCH_HEAD')
             with tempfile.TemporaryDirectory(prefix='ovation-publish-') as temp:
@@ -62,9 +89,7 @@ def publish(repo, branch, body, received, attempts=4, sleep=time.sleep, before_p
                         print('unchanged: successful no-op')
                         return False
                     git(work, 'add', '--all')  # Only our archive writes exist in this fresh sparse worktree.
-                    git(work, '-c', 'user.name=github-actions[bot]', '-c',
-                        'user.email=41898282+github-actions[bot]@users.noreply.github.com',
-                        'commit', '-m', 'data(ovation): archive NOAA snapshot')
+                    git(work, *BOT, 'commit', '-m', 'data(ovation): archive NOAA snapshot')
                     if before_push is not None:
                         before_push(attempt)
                     git(work, 'push', 'origin', 'HEAD:' + target)
@@ -85,9 +110,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--branch', required=True)
     parser.add_argument('--repo', type=Path, default=Path('.'))
+    parser.add_argument('--seed-from', help='branch to start --branch from if it does not exist')
     args = parser.parse_args()
     body, received = collect.download()
-    publish(args.repo.resolve(), args.branch, body, received)
+    publish(args.repo.resolve(), args.branch, body, received, seed_from=args.seed_from)
 
 
 if __name__ == '__main__':

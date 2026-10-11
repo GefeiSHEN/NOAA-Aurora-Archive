@@ -147,11 +147,21 @@ class GitHubReleases:
         path = Path(directory) / name
         return path if result.returncode == 0 and path.exists() else None
 
-    def upload(self, tag, path):
+    def assets(self, tag):
+        """{name: bytes} for the release's assets; empty if the release does not exist."""
+        result = self.gh('release', 'view', tag, '--json', 'assets', check=False)
+        if result.returncode:
+            return {}
+        return {a['name']: a['size'] for a in json.loads(result.stdout)['assets']}
+
+    def upload(self, tag, path, title=None, notes=None):
+        # Releases tag the default branch, never the data branch, so no tag pins data history.
         if self.gh('release', 'view', tag, check=False).returncode:
-            self.gh('release', 'create', tag, '--title', f'OVATION archive {tag[8:]}', '--notes',
-                    'Forecast days moved out of main. Each asset is one OVATION/YYYY/MM/DD folder '
-                    'as tar.xz; OVATION/archive.json on main lists them with SHA-256 digests.')
+            self.gh('release', 'create', tag, '--title', title or f'OVATION archive {tag[8:]}',
+                    '--notes', notes or
+                    'Forecast days moved off the live archive branch. Each asset is one '
+                    'OVATION/YYYY/MM/DD folder as tar.xz; OVATION/archive.json lists them with '
+                    'SHA-256 digests.')
         self.gh('release', 'upload', tag, str(path), '--clobber')
 
 

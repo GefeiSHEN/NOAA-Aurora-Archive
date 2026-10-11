@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: Build and verify archives without uploading or changing main
+        description: Build and verify archives without uploading or changing the data branch
         type: boolean
         default: false
 
@@ -37,6 +37,6 @@ jobs:
       - name: Move days before the 5-day window to release assets
         env:
           GH_TOKEN: ${{ github.token }}
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          DATA_BRANCH: ${{ vars.OVATION_DATA_BRANCH || github.event.repository.default_branch }}
           DRY_RUN: ${{ inputs.dry_run && '--dry-run' || '' }}
-        run: python3 -u scripts/archive_days.py --branch "$DEFAULT_BRANCH" --keep-days 5 $DRY_RUN
+        run: python3 -u scripts/archive_days.py --branch "$DATA_BRANCH" --keep-days 5 $DRY_RUN

@@ -28,6 +28,9 @@ jobs:
       - name: Collect every two minutes until this segment or the cycle ends
         env:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          # Set the OVATION_DATA_BRANCH repository variable to move snapshots off the default branch.
+          # The first publish starts that branch from the default branch's OVATION/ folder.
+          DATA_BRANCH: ${{ vars.OVATION_DATA_BRANCH || github.event.repository.default_branch }}
           SEGMENT_SECONDS: ${{ inputs.seconds }}
           CYCLE_DEADLINE: ${{ inputs.deadline }}
-        run: python3 -u scripts/session.py --branch "$DEFAULT_BRANCH" --seconds "$SEGMENT_SECONDS" --until "$CYCLE_DEADLINE"
+        run: python3 -u scripts/session.py --branch "$DATA_BRANCH" --seed-from "$DEFAULT_BRANCH" --seconds "$SEGMENT_SECONDS" --until "$CYCLE_DEADLINE"

@@ -32,7 +32,9 @@ Forecast time identifies a frame. Identical bytes for an already archived foreca
 - [Recent 24-hour index](https://raw.githubusercontent.com/GefeiSHEN/NOAA-Aurora-Archive/main/OVATION/recent.json)
 - Daily metadata: `https://raw.githubusercontent.com/GefeiSHEN/NOAA-Aurora-Archive/main/OVATION/YYYY/MM/DD/metadata.json`
 
-Every entry's `path` is **repository-root-relative**, including `OVATION/`. Append it to `https://raw.githubusercontent.com/GefeiSHEN/NOAA-Aurora-Archive/main/` and verify the downloaded SHA-256. Raw URLs may be cached; use a single Git commit SHA instead of `main` for a consistent multi-index view.
+Every entry's `path` is **repository-root-relative**, including `OVATION/`. Append it to `https://raw.githubusercontent.com/GefeiSHEN/NOAA-Aurora-Archive/main/` and verify the downloaded SHA-256. Raw URLs may be cached; use a single Git commit SHA instead of `main` for a consistent multi-index view, and only for a short time.
+
+When the archive moves to its own `data` branch (see [Data branch and monthly history reset](#data-branch-and-monthly-history-reset)), replace `main` with `data` in every URL above. Paths and file contents stay the same.
 
 The previous root-level indexes and observation-based filenames have migrated. Consumers using old URLs must update them. Historical commit URLs retain their old layout.
 
@@ -94,7 +96,7 @@ The local collector writes `/tmp/aurora-preview/OVATION/` and never commits or p
 
 Standard `ubuntu-latest` execution is [free for public repositories](https://docs.github.com/en/billing/concepts/product-billing/github-actions), including waiting between collections. Workflows skip private repositories. There are no paid runners, external schedulers, Actions artifacts/caches, or Git LFS. A cycle uses one active runner slot at a time; free execution does not mean unlimited storage.
 
-All unique snapshots are retained; none are deleted. Git delta-compresses the near-identical snapshots, so the stored repository grows about 10 MB/day even though a day's files total about 250 MB. Monitor repository size and [GitHub repository limits](https://docs.github.com/en/repositories/creating-and-managing-repositories/repository-limits). No history rewriting is configured.
+All unique snapshots are retained; none are deleted. Git delta-compresses the near-identical snapshots, so the stored repository grows about 10 MB/day even though a day's files total about 250 MB. Monitor repository size and [GitHub repository limits](https://docs.github.com/en/repositories/creating-and-managing-repositories/repository-limits). History rewriting is opt-in; see [Data branch and monthly history reset](#data-branch-and-monthly-history-reset).
 
 The collector checks out only `latest.json`, `recent.json` and the snapshot's day folder, so its disk use and time per poll do not grow with the archive.
 
@@ -106,6 +108,29 @@ The collector checks out only `latest.json`, `recent.json` and the snapshot's da
 | `release`, `asset`, `url` | Where to download the tarball |
 | `sha256`, `bytes`, `files` | Digest and size of the tarball, number of files inside |
 | `tree` | Git tree of the folder; unchanged folders only are removed |
-| `commit` | A commit that still holds the folder; raw URLs at that commit keep working |
+| `commit` | A commit that held the folder. On `main` it keeps working; on the `data` branch it stops resolving after the next monthly reset, and the tarball (or the history bundle) is the copy to use |
 
 Extract with `tar -xJf OVATION-YYYY-MM-DD.tar.xz`; it restores `OVATION/YYYY/MM/DD/` byte for byte, including `metadata.json`. Run the workflow with **dry_run** to build and verify without uploading or changing `main`.
+
+## Data branch and monthly history reset
+
+Every snapshot is a commit, so history grows by about 10 MB a day forever, even though `main` only keeps five days of files. To cap that, the archive can live on its own branch whose history restarts once a month. Code and workflows stay on `main`, whose history is never rewritten.
+
+It is off until the repository variable **`OVATION_DATA_BRANCH`** is set (Settings → Secrets and variables → Actions → Variables), normally to `data`. Before that, everything runs on `main` exactly as described above.
+
+**Switching over.** Set the variable. The next collection segment (within about five hours) finds no `data` branch and starts it as one parentless commit holding `main`'s `OVATION/` folder, then publishes there from then on. The archiver follows the same variable. Consumers must change `/main/` to `/data/` in their raw URLs at this point. `main`'s copy stops updating, and the first reset removes it with an ordinary commit once it confirms the `data` branch started from exactly that copy.
+
+**Monthly reset.** The **Reset OVATION data history** workflow (`scripts/reset_history.py`) runs on the 1st of each month at 04:23 UTC and only when the variable is set. It:
+
+1. Refuses unless every day folder that the branch's history ever removed is listed in `OVATION/archive.json` and its asset is on its release with the recorded size.
+2. Saves the branch's whole history as `ovation-data-YYYY-MM-DD-<commit>.bundle` on the release `ovation-history`, downloads it back, compares SHA-256, and fetches it into an empty repository with object checks to prove it restores the old head.
+3. Replaces the branch with one parentless commit whose files are exactly the old head's, using `--force-with-lease`. If the collector pushed meanwhile, it bundles just the new commits as a `-part.bundle` and tries again from the new head, so no commit is dropped unsaved.
+
+Run it from **Actions → Reset OVATION data history → Run workflow**; manual runs default to **dry_run**, which does all checks and builds and verifies the bundle without uploading or pushing. A dry run works before switching over too; it then checks `main` and never rewrites it. Restore a month with `git fetch <bundle> 'refs/ovation/history:refs/ovation/history'`, oldest bundle first.
+
+**What changes for you.**
+
+- Raw URLs on `/data/` keep working through a reset because the files are identical. URLs pinned to a `data` commit SHA stop working once GitHub garbage-collects the old commits.
+- Existing clones of `data` see a forced update; run `git fetch origin && git reset --hard origin/data`. Never merge an old `data` checkout back, or the old history returns until the next reset.
+- GitHub keeps unreachable objects until its own garbage collection, so the reported repository size drops later, not at the reset. History already on `main` (and pinned by pull request refs) stays; what stops is the growth.
+- GitHub refuses pushes from the built-in Actions token that add or change workflow files. `data` holds none, so the built-in token can reset it; rewriting `main` would need a personal token with workflow scope, which this project avoids. Branch protection, if added to `data`, must allow force pushes from GitHub Actions.

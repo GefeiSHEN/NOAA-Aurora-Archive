@@ -23,7 +23,11 @@ class FakeReleases:
             return None
         return Path(shutil.copy(source, Path(directory) / name))
 
-    def upload(self, tag, path):
+    def assets(self, tag):
+        folder = self.root / tag
+        return {f.name: f.stat().st_size for f in folder.iterdir()} if folder.exists() else {}
+
+    def upload(self, tag, path, title=None, notes=None):
         (self.root / tag).mkdir(parents=True, exist_ok=True)
         shutil.copy(path, self.root / tag / path.name)
         self.uploads.append(path.name)

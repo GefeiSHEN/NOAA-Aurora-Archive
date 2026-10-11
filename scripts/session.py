@@ -76,11 +76,15 @@ def main():
     parser.add_argument('--branch', required=True)
     parser.add_argument('--seconds', type=int, default=18000)
     parser.add_argument('--until', type=float, help='shared workflow deadline as Unix seconds')
+    parser.add_argument('--seed-from', help='branch to start --branch from if it does not exist')
     args = parser.parse_args()
     publisher = Path(__file__).with_name('publish.py')
+    command = [sys.executable, '-u', str(publisher), '--branch', args.branch]
+    if args.seed_from and args.seed_from != args.branch:
+        command += ['--seed-from', args.seed_from]
     def collect(timeout):
         try:
-            run_command([sys.executable, '-u', str(publisher), '--branch', args.branch], timeout)
+            run_command(command, timeout)
         except subprocess.TimeoutExpired:
             if args.until is None or datetime.now(UTC).timestamp() < args.until:
                 raise
