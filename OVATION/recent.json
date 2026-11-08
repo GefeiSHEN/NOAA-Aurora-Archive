@@ -2,6 +2,18 @@
   "schema_version": 1,
   "snapshots": [
     {
+      "collected_at": "2026-11-08T08:54:00Z",
+      "forecast_time": "2026-11-08T09:24:00Z",
+      "http_validators": {
+        "etag": "\"e05e9-65fbff66c71ff\"",
+        "last-modified": "Sun, 08 Nov 2026 08:52:17 GMT"
+      },
+      "observation_time": "2026-11-08T08:48:00Z",
+      "path": "OVATION/2026/11/08/20261108T092400Z.json",
+      "sha256": "4a5d27f288e31157bb2759494059efd833b97ec14f6d067f144d5236dcee1431",
+      "source_url": "https://services.swpc.noaa.gov/json/ovation_aurora_latest.json"
+    },
+    {
       "collected_at": "2026-11-08T08:48:00Z",
       "forecast_time": "2026-11-08T09:19:00Z",
       "http_validators": {
@@ -3443,18 +3455,6 @@
       "observation_time": "2026-11-07T08:53:00Z",
       "path": "OVATION/2026/11/07/20261107T094800Z.json",
       "sha256": "b336a124669123e738c0578efdc0ac6b0da56d11b87536a5363dd85993b602f5",
-      "source_url": "https://services.swpc.noaa.gov/json/ovation_aurora_latest.json"
-    },
-    {
-      "collected_at": "2026-11-07T08:54:00Z",
-      "forecast_time": "2026-11-07T09:43:00Z",
-      "http_validators": {
-        "etag": "\"e1372-65fabd6ed66b8\"",
-        "last-modified": "Sat, 07 Nov 2026 08:51:50 GMT"
-      },
-      "observation_time": "2026-11-07T08:48:00Z",
-      "path": "OVATION/2026/11/07/20261107T094300Z.json",
-      "sha256": "fd0eb3e58d36c39814f29bea278bc851c96740f83ef97f15e9dfee0d7c1593f3",
       "source_url": "https://services.swpc.noaa.gov/json/ovation_aurora_latest.json"
     }
   ],
